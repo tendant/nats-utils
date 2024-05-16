@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"os"
 
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/nats-io/nats.go/jetstream"
@@ -17,18 +18,34 @@ type ProcessorConfig struct {
 func main() {
 	var config ProcessorConfig
 	cleanenv.ReadEnv(&config)
-	nc, _ := processor.CreateNc(config.NatsConfig)
+	nc, err := processor.CreateNc(config.NatsConfig)
+	defer nc.Drain()
 
-	js, _ := processor.CreateJS(nc)
+	slog.Info("natsurl", "NatsURL", config.NatsURL)
+	if err != nil {
+		slog.Error("Failed connecting to Nats Server", "NatsURL", config.NatsURL, "err", err)
+		os.Exit(-1)
+	} else {
+		slog.Info("Connected to Nats Server!")
+	}
 
-	consumer, _ := processor.CreateOrUpdateConsumer(context.Background(), js, config.ConsumerConfig)
+	js, err := processor.CreateJS(nc)
+	if err != nil {
+		slog.Error("Failed Connect to Stream Context! ", "err", err)
+		os.Exit(-1)
+	} else {
+		slog.Info("Connect to Stream Context!")
+	}
+
+	consumer, err := processor.CreateOrUpdateConsumer(context.Background(), js, config.ConsumerConfig)
+	if err != nil {
+		slog.Error("Failed CreateOrUpdateConsumer", "err", err)
+		os.Exit(-1)
+	}
 
 	proc := processor.NewProcessor(consumer, processFn)
 
 	proc.Process()
-
-	nc.Drain()
-
 }
 
 func processFn(msg jetstream.Msg) error {
