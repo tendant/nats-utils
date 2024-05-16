@@ -1,0 +1,18 @@
+package processor
+
+type NatsConfig struct {
+	NatsURL string `env:"NATS_URL" env-default:"nats://127.0.0.1:4222"`
+	SinkURL string `env:"SINK_URL" env-default:"http://localhost:14000/events"`
+}
+
+type StreamConfig struct {
+	Name string `env:"STREAM_NAME" env-default:"DEMO"`
+	// Subjects string `env:"STREAM_SUBJECTS" env-default:"demo.>"`
+}
+
+type ConsumerConfig struct {
+	Name           string `env:"CONSUMER_NAME" env-default:"demo-durable"`
+	FilterSubjects string `env:"FILTER_SUBJECTS" env-default:"demo.sub1,demo.sub2"`
+	DeliverPolicy  string `env:"DELIVER_POLICY" env-default:"new"`
+	StreamName     string `env:"STREAM_NAME" env-default:"DEMO"`
+}
