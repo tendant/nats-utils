@@ -48,7 +48,27 @@ func main() {
 	proc.Process()
 }
 
+type ExampleEvent struct {
+	Id   int    `json:"id"`
+	Name string `json:"name"`
+}
+
 func processFn(msg jetstream.Msg) error {
 	slog.Debug("processFn: ", "msg", msg)
+
+	// parse event from msg
+	event, err := processor.ParseEvent(msg)
+	if err != nil {
+		return err
+	}
+
+	// parse data from event
+	var ee ExampleEvent
+	err = processor.LoadFromMap(&ee, &event.Data)
+	if err != nil {
+		return processor.NewErrIgnorable("erorr parsing event data", err)
+	}
+
+	slog.Info("parsed", "id", ee.Id, "name", ee.Name)
 	return nil
 }
