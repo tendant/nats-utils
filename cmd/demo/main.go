@@ -18,6 +18,8 @@ type ProcessorConfig struct {
 func main() {
 	var config ProcessorConfig
 	cleanenv.ReadEnv(&config)
+	_ = cleanenv.ReadConfig(".env", &config)
+
 	nc, err := processor.CreateNc(config.NatsConfig)
 	defer nc.Drain()
 	if err != nil {
