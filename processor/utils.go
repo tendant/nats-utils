@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
-	"golang.org/x/exp/slog"
 )
 
 const (
@@ -40,7 +40,10 @@ func CreateJS(nc *nats.Conn) (jetstream.JetStream, error) {
 	if err != nil {
 		slog.Error("Failed Connect to Stream Context! ", err)
 		return nil, err
+	} else {
+		slog.Info("Connected to Stream Context!")
 	}
+
 	return js, nil
 }
 

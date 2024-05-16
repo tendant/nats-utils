@@ -1,10 +1,10 @@
 package processor
 
 import (
+	"log/slog"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
-	"golang.org/x/exp/slog"
 )
 
 // Processor represents the state and configuration of a NATS processor.
