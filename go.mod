@@ -1,4 +1,4 @@
-module github.com/tendant/nats-processor
+module github.com/tendant/nats-utils
 
 go 1.22.3
 
