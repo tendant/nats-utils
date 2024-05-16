@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/ilyakaznacheev/cleanenv"
+	"github.com/nats-io/nats.go/jetstream"
 	"github.com/tendant/nats-utils/processor"
 	"golang.org/x/exp/slog"
 )
@@ -30,7 +31,7 @@ func main() {
 
 }
 
-func processFn(msg interface{}) error {
-	slog.Debug("msg: ", "msg", msg)
+func processFn(msg jetstream.Msg) error {
+	slog.Debug("processFn: ", "msg", msg)
 	return nil
 }
