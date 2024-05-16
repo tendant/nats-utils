@@ -2,6 +2,7 @@ package processor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"strings"
@@ -117,4 +118,39 @@ func CreateOrUpdateConsumer(ctx context.Context, js jetstream.JetStream, ci Cons
 	)
 
 	return consumer, nil
+}
+
+func LoadFromMap(to, from any) error {
+	data, err := json.Marshal(from)
+	if err == nil {
+		err = json.Unmarshal(data, to)
+	}
+	return err
+}
+
+func ParseEvent(msg jetstream.Msg) (EventData, error) {
+	// parse event
+	var data EventData
+	err := json.Unmarshal(msg.Data(), &data)
+	if err != nil {
+		errorMsgData := map[string]any{
+			"subject":     msg.Subject(),
+			"dataSnippet": string(msg.Data()),
+		}
+
+		// Attempt to get message metadata, if available
+		if metadata, metadataErr := msg.Metadata(); metadataErr == nil {
+			errorMsgData["stream"] = metadata.Stream
+			errorMsgData["timestamp"] = metadata.Timestamp
+			errorMsgData["numDelivered"] = metadata.NumDelivered
+		} else {
+			errorMsgData["metadataError"] = metadataErr.Error()
+		}
+
+		criticalErr := NewErrCritical("Error unmarshalling msg.Data", err, errorMsgData)
+		slog.Error("Error unmarshalling msg.Data: ", "err", err)
+		return data, criticalErr
+	} else {
+		return data, nil
+	}
 }
