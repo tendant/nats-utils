@@ -13,7 +13,7 @@ type Processor struct {
 	processFn ProcessFn
 }
 
-type ProcessFn func(interface{}) error
+type ProcessFn func(jetstream.Msg) error
 
 func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn) *Processor {
 	return &Processor{
@@ -36,7 +36,7 @@ func (p *Processor) Process() {
 		slog.Info("Received a JetStream message", "subject", msg.Subject())
 		slog.Info("Processing message", "data", string(msg.Data()))
 
-		p.processFn(msg.Data())
+		p.processFn(msg)
 	}
 
 }
