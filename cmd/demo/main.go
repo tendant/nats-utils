@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/ilyakaznacheev/cleanenv"
-	"github.com/tendant/nats-processor/processor"
+	"github.com/tendant/nats-utils/processor"
 	"golang.org/x/exp/slog"
 )
 
