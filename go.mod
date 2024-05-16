@@ -5,7 +5,6 @@ go 1.22.3
 require (
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/nats-io/nats.go v1.34.1
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842
 )
 
 require (
