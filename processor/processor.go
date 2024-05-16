@@ -36,7 +36,12 @@ func (p *Processor) Process() {
 		slog.Info("Received a JetStream message", "subject", msg.Subject())
 		slog.Info("Processing message", "data", string(msg.Data()))
 
-		p.processFn(msg)
+		err = p.processFn(msg)
+		if err != nil {
+			p.handleErr(err, msg)
+		} else {
+			msg.Ack()
+		}
 	}
 
 }
