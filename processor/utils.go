@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os"
 	"strings"
@@ -121,6 +122,49 @@ func CreateOrUpdateConsumer(ctx context.Context, js jetstream.JetStream, ci Cons
 	)
 
 	return consumer, nil
+}
+
+func CreateStream(ctx context.Context, js jetstream.JetStream, streamName string, streamSubjects []string, recreate bool) (jetstream.JetStream, error) {
+	slog.Info("Createing stream", "name", streamName, "subjects", streamSubjects)
+	_, err := js.CreateStream(ctx, jetstream.StreamConfig{
+		Name:     streamName,
+		Subjects: streamSubjects,
+	})
+	if err != nil {
+		if recreate {
+			slog.Error("Failed AddStream! Updating...")
+
+			_, err = js.UpdateStream(ctx, jetstream.StreamConfig{
+				Name:        streamName,
+				Subjects:    streamSubjects,
+				Description: fmt.Sprintf("Updated %s", streamName),
+			})
+		} else {
+			slog.Error("Failed creating stream", "name", streamName, "err", err)
+		}
+	} else {
+		slog.Info("Created stream", "name", streamName)
+	}
+
+	return js, err
+}
+
+func SetupStreams(ncConfig NatsConfig, streams map[string][]string) {
+	nc, err := CreateNc(ncConfig)
+	defer nc.Drain()
+	if err != nil {
+		return
+	}
+
+	js, err := CreateJS(nc)
+	if err != nil {
+		return
+	}
+
+	ctx := context.Background()
+	for name, subjects := range streams {
+		CreateStream(ctx, js, name, subjects, false)
+	}
 }
 
 func LoadFromMap(to, from any) error {
