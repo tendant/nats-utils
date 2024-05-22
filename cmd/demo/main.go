@@ -65,3 +65,14 @@ func processFn(msg jetstream.Msg) error {
 	slog.Info("parsed", "id", ee.Id, "name", ee.Name)
 	return nil
 }
+
+func Ready(w http.ResponseWriter, r *http.Request) {
+	ready := true
+
+	// Return
+	if ready {
+		render.PlainText(w, r, "Ready")
+	} else {
+		render.PlainText(w, r, "Not Ready")
+	}
+}
