@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 
+	"github.com/go-chi/render"
 	"github.com/ilyakaznacheev/cleanenv"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/tendant/chi-demo/app"
 	"github.com/tendant/nats-utils/processor"
 )
 
@@ -38,7 +41,14 @@ func main() {
 
 	proc := processor.NewProcessor(consumer, processFn)
 
-	proc.Process()
+	go func() {
+		proc.Process()
+	}()
+
+	s := app.Default()
+	app.Routes(s.R)
+	s.R.Get("/healthz/ready", Ready)
+	s.Run()
 }
 
 type ExampleEvent struct {
