@@ -39,7 +39,7 @@ func CreateJS(nc *nats.Conn) (jetstream.JetStream, error) {
 	// Create a JetStream management interface
 	js, err := jetstream.New(nc)
 	if err != nil {
-		slog.Error("Failed Connect to Stream Context! ", err)
+		slog.Error("Failed Connect to Stream Context! ", "err", err)
 		return nil, err
 	} else {
 		slog.Info("Connected to Stream Context!")
