@@ -46,7 +46,6 @@ func main() {
 	}()
 
 	s := app.Default()
-	app.Routes(s.R)
 	s.R.Get("/healthz/ready", Ready)
 	s.Run()
 }
