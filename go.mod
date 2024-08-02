@@ -14,8 +14,7 @@ require (
 	github.com/ajg/form v1.5.1 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
-	github.com/ggicci/httpin v0.19.0 // indirect
-	github.com/ggicci/owl v0.8.2 // indirect
+	github.com/ggicci/httpin v0.10.1 // indirect
 	github.com/go-chi/chi/v5 v5.0.12 // indirect
 	github.com/go-chi/cors v1.2.1 // indirect
 	github.com/go-chi/httplog v0.3.2 // indirect
@@ -32,10 +31,7 @@ require (
 	github.com/prometheus/procfs v0.15.0 // indirect
 	github.com/rs/zerolog v1.32.0 // indirect
 	github.com/slok/go-http-metrics v0.12.0 // indirect
-	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
-	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/sys v0.20.0 // indirect
 	golang.org/x/text v0.15.0 // indirect
 	google.golang.org/protobuf v1.34.1 // indirect
