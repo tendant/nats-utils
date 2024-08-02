@@ -6,7 +6,7 @@ require (
 	github.com/go-chi/render v1.0.3
 	github.com/ilyakaznacheev/cleanenv v1.5.0
 	github.com/nats-io/nats.go v1.35.0
-	github.com/tendant/chi-demo v1.1.0
+	github.com/tendant/chi-demo v1.4.1
 )
 
 require (
