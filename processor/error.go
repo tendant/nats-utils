@@ -68,43 +68,90 @@ func NewErrIgnorable(message string, inner error) error {
 	return &ErrIgnorable{Message: message, Inner: inner}
 }
 
+const (
+	maxRetryAttempts = 5
+	retryDelay       = 5 * time.Second
+)
+
+// handleErr processes different types of errors and takes appropriate action
 func (p *Processor) handleErr(err error, msg jetstream.Msg) {
+	if err == nil {
+		msg.Ack()
+		return
+	}
+
+	metadata, errMetadata := msg.Metadata()
+	if errMetadata != nil {
+		slog.Error("Failed to retrieve message metadata", 
+			"error", errMetadata,
+			"msgSubject", msg.Subject(),
+		)
+		// Continue processing with default metadata
+		metadata = &jetstream.MsgMetadata{}
+	}
+
+	// Log common message context
+	logCtx := []any{
+		"msgId", msg.Subject(),
+		"attempts", metadata.NumDelivered,
+		"timestamp", metadata.Timestamp,
+	}
+
 	var errCritical *ErrCritical
 	var errRetryable *ErrRetryable
 	var errIgnorable *ErrIgnorable
 
-	if errors.As(err, &errCritical) {
-		// Handle critical error
-		slog.Error("Critical error encountered",
-			"errorMsg", errCritical.Message,
-			"innerError", errCritical.Inner,
-			"errorData", errCritical.Data,
-		)
-		msg.Ack()
+	switch {
+	case errors.As(err, &errCritical):
+		handleCriticalError(errCritical, msg, logCtx)
+
+	case errors.As(err, &errRetryable):
+		handleRetryableError(errRetryable, msg, metadata.NumDelivered, logCtx)
+
+	case errors.As(err, &errIgnorable):
+		handleIgnorableError(errIgnorable, msg, logCtx)
+
+	default:
+		// Treat unknown errors as critical
+		slog.Error("Unknown error type encountered", append(logCtx,
+			"error", err,
+			"errorType", fmt.Sprintf("%T", err),
+		)...)
+		msg.Ack() // Acknowledge to prevent infinite retry
 		os.Exit(-1)
-	} else if errors.As(err, &errRetryable) {
-		// Handle retryable error
-		metadata, errMetadata := msg.Metadata()
-		if errMetadata != nil {
-			slog.Error("error retrieving msg metadata", "error", errMetadata)
-		}
-		attempts := metadata.NumDelivered
-		if attempts >= 5 {
-			slog.Error("Max retry attempts reached, handling message", "error", errRetryable, "attempts", attempts)
-			msg.Ack()
-		} else {
-			slog.Error("Retryable error encountered, will attempt to reprocess", "error", errRetryable, "attempts", attempts)
-			msg.NakWithDelay(time.Duration(5) * time.Second)
-			os.Exit(-1)
-		}
-	} else if errors.As(err, &errIgnorable) {
-		// Handle ignorable error
-		slog.Info("Ignorable error encountered, proceeding", "error", errIgnorable)
+	}
+}
+
+func handleCriticalError(err *ErrCritical, msg jetstream.Msg, logCtx []any) {
+	slog.Error("Critical error encountered", append(logCtx,
+		"errorMsg", err.Message,
+		"innerError", err.Inner,
+		"errorData", err.Data,
+	)...)
+	msg.Ack()
+	os.Exit(-1)
+}
+
+func handleRetryableError(err *ErrRetryable, msg jetstream.Msg, attempts uint64, logCtx []any) {
+	if attempts >= maxRetryAttempts {
+		slog.Error("Max retry attempts reached", append(logCtx,
+			"error", err,
+			"maxAttempts", maxRetryAttempts,
+		)...)
 		msg.Ack()
-	} else {
-		// Handle unknown error
-		slog.Error("Unknown error type", "error", err)
-		msg.Ack()
+		return
 	}
 
+	slog.Warn("Retryable error encountered", append(logCtx,
+		"error", err,
+		"nextRetryIn", retryDelay,
+	)...)
+	msg.NakWithDelay(retryDelay)
+}
+
+func handleIgnorableError(err *ErrIgnorable, msg jetstream.Msg, logCtx []any) {
+	slog.Info("Ignorable error encountered", append(logCtx,
+		"error", err,
+	)...)
+	msg.Ack()
 }
