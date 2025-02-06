@@ -23,6 +23,10 @@ func (e *ErrCritical) Error() string {
 	return e.Message
 }
 
+func (e *ErrCritical) Unwrap() error {
+	return e.Inner
+}
+
 func NewErrCritical(message string, inner error, data map[string]any) error {
 	if inner == nil && message == "" {
 		panic("ErrCritical requires either a message or an inner error")
@@ -42,6 +46,10 @@ func (e *ErrRetryable) Error() string {
 	return e.Message
 }
 
+func (e *ErrRetryable) Unwrap() error {
+	return e.Inner
+}
+
 func NewErrRetryable(message string, inner error) error {
 	if inner == nil && message == "" {
 		panic("ErrRetryable requires either a message or an inner error")
@@ -59,6 +67,10 @@ func (e *ErrIgnorable) Error() string {
 		return fmt.Sprintf("%s: %v", e.Message, e.Inner)
 	}
 	return e.Message
+}
+
+func (e *ErrIgnorable) Unwrap() error {
+	return e.Inner
 }
 
 func NewErrIgnorable(message string, inner error) error {
@@ -82,7 +94,7 @@ func (p *Processor) handleErr(err error, msg jetstream.Msg) {
 
 	metadata, errMetadata := msg.Metadata()
 	if errMetadata != nil {
-		slog.Error("Failed to retrieve message metadata", 
+		slog.Error("Failed to retrieve message metadata",
 			"error", errMetadata,
 			"msgSubject", msg.Subject(),
 		)
