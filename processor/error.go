@@ -62,6 +62,11 @@ type ErrIgnorable struct {
 	Inner   error
 }
 
+type ErrBlocking struct {
+	Message string
+	Inner   error
+}
+
 func (e *ErrIgnorable) Error() string {
 	if e.Inner != nil {
 		return fmt.Sprintf("%s: %v", e.Message, e.Inner)
@@ -78,6 +83,24 @@ func NewErrIgnorable(message string, inner error) error {
 		panic("ErrIgnorable requires either a message or an inner error")
 	}
 	return &ErrIgnorable{Message: message, Inner: inner}
+}
+
+func (e *ErrBlocking) Error() string {
+	if e.Inner != nil {
+		return fmt.Sprintf("%s: %v", e.Message, e.Inner)
+	}
+	return e.Message
+}
+
+func (e *ErrBlocking) Unwrap() error {
+	return e.Inner
+}
+
+func NewErrBlocking(message string, inner error) error {
+	if inner == nil && message == "" {
+		panic("ErrBlocking requires either a message or an inner error")
+	}
+	return &ErrBlocking{Message: message, Inner: inner}
 }
 
 const (
@@ -112,6 +135,7 @@ func (p *Processor) handleErr(err error, msg jetstream.Msg) {
 	var errCritical *ErrCritical
 	var errRetryable *ErrRetryable
 	var errIgnorable *ErrIgnorable
+	var errBlocking *ErrBlocking
 
 	switch {
 	case errors.As(err, &errCritical):
@@ -122,6 +146,9 @@ func (p *Processor) handleErr(err error, msg jetstream.Msg) {
 
 	case errors.As(err, &errIgnorable):
 		handleIgnorableError(errIgnorable, msg, logCtx)
+
+	case errors.As(err, &errBlocking):
+		handleBlockingError(errBlocking, msg, logCtx)
 
 	default:
 		// Treat unknown errors as critical
@@ -166,4 +193,14 @@ func handleIgnorableError(err *ErrIgnorable, msg jetstream.Msg, logCtx []any) {
 		"error", err,
 	)...)
 	msg.Ack()
+}
+
+func handleBlockingError(err *ErrBlocking, msg jetstream.Msg, logCtx []any) {
+	slog.Info("Blocking error encountered - message will remain pending", append(logCtx,
+		"subject", msg.Subject(),
+		"error", err,
+	)...)
+	// Intentionally not acknowledging the message
+	// This will cause the message to remain pending and be redelivered
+	// after the consumer's AckWait timeout
 }
