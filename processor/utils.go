@@ -8,15 +8,19 @@ import (
 	"log/slog"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
+	"github.com/sosodev/duration"
 )
 
 const (
 	// MaxDeliver defines the maximum number of delivery attempts for a message.
 	// Applies to any message that is re-sent due to ack policy.
 	MaxDeliver int = 5
+	// AckWait defines the maximum time to wait for an acknowledgement before resending a message.
+	AckWait time.Duration = 30 * time.Second
 )
 
 func CreateNc(ncConfig NatsConfig) (*nats.Conn, error) {
@@ -61,12 +65,33 @@ func CreateOrUpdateConsumer(ctx context.Context, js jetstream.JetStream, ci Cons
 		}
 	}()
 
+	aw := func() time.Duration {
+		if ci.AckWait == "" {
+			slog.Warn("AckWait is not set, using default", "AckWait", AckWait)
+			return AckWait
+		}
+		d, err := duration.Parse(ci.AckWait)
+		if err != nil {
+			slog.Error("Failed to parse AckWait", "err", err)
+			return AckWait
+		}
+		return d.ToTimeDuration()
+	}()
+
 	filterSubjects := strings.Split(ci.FilterSubjects, ",")
 	consumerConfig := jetstream.ConsumerConfig{
 		Durable:        ci.Name,
 		FilterSubjects: filterSubjects,
 		AckPolicy:      jetstream.AckExplicitPolicy,
-		MaxDeliver:     MaxDeliver,
+		AckWait:        aw,
+	}
+
+	if ci.MaxDeliver != 0 {
+		consumerConfig.MaxDeliver = ci.MaxDeliver
+	}
+
+	if ci.MaxAckPending != 0 {
+		consumerConfig.MaxAckPending = ci.MaxAckPending
 	}
 
 	// Check if the consumer already exists. If not, create a new one with the specified deliver policy.
