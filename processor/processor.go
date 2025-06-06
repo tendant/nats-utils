@@ -9,11 +9,16 @@ import (
 
 const defaultFetchTimeout = 60 * time.Second
 
+// ConditionCheckFn is a function that checks if conditions are met for processing a message
+type ConditionCheckFn func(jetstream.Msg) (bool, error)
+
 // Processor represents the state and configuration of a NATS processor.
 type Processor struct {
 	consumer     jetstream.Consumer
 	processFn    ProcessFn
 	fetchTimeout time.Duration
+	conditionFn  ConditionCheckFn
+	maxRetries   int
 }
 
 // WithFetchTimeout sets the timeout duration for fetching messages.
@@ -24,6 +29,18 @@ func WithFetchTimeout(timeout time.Duration) func(*Processor) {
 	}
 }
 
+func WithConditionCheck(conditionFn ConditionCheckFn) func(*Processor) {
+	return func(p *Processor) {
+		p.conditionFn = conditionFn
+	}
+}
+
+func WithMaxRetries(maxRetries int) func(*Processor) {
+	return func(p *Processor) {
+		p.maxRetries = maxRetries
+	}
+}
+
 type ProcessFn func(jetstream.Msg) error
 
 func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func(*Processor)) *Processor {
@@ -31,6 +48,8 @@ func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func
 		consumer:     consumer,
 		processFn:    processFn,
 		fetchTimeout: defaultFetchTimeout,
+		maxRetries:   10,  // Default max retries
+		conditionFn:  nil, // No condition check by default
 	}
 
 	// Apply any custom options
@@ -49,18 +68,57 @@ func (p *Processor) Process() {
 		msg, err := p.consumer.Next(jetstream.FetchMaxWait(p.fetchTimeout))
 		if err != nil {
 			slog.Warn("Failed fetch messages!", "err", err)
-			// return
 			continue
 		}
 		slog.Info("Received a JetStream message", "subject", msg.Subject())
 		slog.Info("Processing message", "data", string(msg.Data()))
 
+		// Check if we have a condition function and if conditions are met
+		if p.conditionFn != nil {
+			conditionMet, err := p.conditionFn(msg)
+			if err != nil {
+				slog.Error("Error checking condition", "err", err)
+				p.handleErr(err, msg)
+				continue
+			}
+
+			if !conditionMet {
+				// Condition not met, check metadata for retry count
+				metadata, err := msg.Metadata()
+				if err != nil {
+					slog.Error("Error getting message metadata", "err", err)
+					p.handleErr(err, msg)
+					continue
+				}
+
+				// Check if we've exceeded max retries
+				if metadata.NumDelivered > uint64(p.maxRetries) {
+					slog.Warn("Max retries exceeded, terminating message", "msgID", metadata.Stream)
+					// Acknowledge the message to remove it from the queue
+					msg.Ack()
+					continue
+				}
+
+				// Condition not met and under retry limit, do not ack so it will be redelivered
+				slog.Info("Condition not met, message will be reprocessed later",
+					"delivery", metadata.NumDelivered,
+					"maxRetries", p.maxRetries)
+
+				// Let the message go back to the stream without acknowledgment
+				continue
+			}
+
+			// Condition met, proceed with processing
+			slog.Info("Condition met, processing message")
+		}
+
+		// Process the message
 		err = p.processFn(msg)
 		if err != nil {
 			p.handleErr(err, msg)
 		} else {
+			// Acknowledge the message
 			msg.Ack()
 		}
 	}
-
 }
