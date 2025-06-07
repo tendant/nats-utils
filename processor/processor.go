@@ -18,7 +18,6 @@ type Processor struct {
 	processFn    ProcessFn
 	fetchTimeout time.Duration
 	conditionFn  ConditionCheckFn
-	maxRetries   int
 }
 
 // WithFetchTimeout sets the timeout duration for fetching messages.
@@ -35,12 +34,6 @@ func WithConditionCheck(conditionFn ConditionCheckFn) func(*Processor) {
 	}
 }
 
-func WithMaxRetries(maxRetries int) func(*Processor) {
-	return func(p *Processor) {
-		p.maxRetries = maxRetries
-	}
-}
-
 type ProcessFn func(jetstream.Msg) error
 
 func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func(*Processor)) *Processor {
@@ -48,7 +41,6 @@ func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func
 		consumer:     consumer,
 		processFn:    processFn,
 		fetchTimeout: defaultFetchTimeout,
-		maxRetries:   10,  // Default max retries
 		conditionFn:  nil, // No condition check by default
 	}
 
