@@ -9,8 +9,33 @@ import (
 
 const defaultFetchTimeout = 60 * time.Second
 
+// ConditionResult represents the result of a condition check
+type ConditionResult struct {
+	// ShouldProcess indicates whether the message should be processed
+	ShouldProcess bool
+
+	// RetryDelay specifies how long to wait before retrying if ShouldProcess is false
+	// A zero value means no retry
+	RetryDelay time.Duration
+
+	// Reason provides context about why the condition check passed or failed
+	Reason string
+
+	// MaxRetries specifies a custom max retry count for this specific message
+	// If set to 0, the system default is used
+	MaxRetries int
+
+	// Metadata contains additional context-specific information
+	// that might be useful for logging or debugging
+	Metadata map[string]interface{}
+
+	// TerminateIfFailed indicates whether to terminate processing (ack the message)
+	// if the condition is not met, rather than scheduling a retry
+	TerminateIfFailed bool
+}
+
 // ConditionCheckFn is a function that checks if conditions are met for processing a message
-type ConditionCheckFn func(jetstream.Msg) (bool, error)
+type ConditionCheckFn func(jetstream.Msg) (ConditionResult, error)
 
 // Processor represents the state and configuration of a NATS processor.
 type Processor struct {
