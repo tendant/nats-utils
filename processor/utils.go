@@ -52,6 +52,84 @@ func CreateJS(nc *nats.Conn) (jetstream.JetStream, error) {
 	return js, nil
 }
 
+// HandleConditionResult processes the result of a condition check and takes appropriate action
+// based on the result. It returns true if the message should be processed, false otherwise.
+func HandleConditionResult(msg jetstream.Msg, result ConditionResult) (shouldProcess bool, err error) {
+	if !result.ShouldProcess {
+		// Prepare log fields
+		logFields := []interface{}{
+			"delay", result.RetryDelay,
+		}
+
+		// Add reason if provided
+		if result.Reason != "" {
+			logFields = append(logFields, "reason", result.Reason)
+		}
+
+		// Add any metadata
+		if len(result.Metadata) > 0 {
+			for k, v := range result.Metadata {
+				logFields = append(logFields, k, v)
+			}
+		}
+
+		// Get message metadata for delivery count
+		metadata, err := msg.Metadata()
+		if err != nil {
+			slog.Error("Error getting message metadata", "err", err)
+			return false, err
+		}
+
+		// Add delivery count to log fields
+		logFields = append(logFields, "delivery", metadata.NumDelivered)
+
+		// Check if we should terminate processing permanently
+		if result.TerminateIfFailed {
+			slog.Info("Condition not met, terminating message processing", logFields...)
+			if err := msg.Ack(); err != nil {
+				slog.Error("Failed to ACK message for termination", "error", err)
+				return false, err
+			}
+			return false, nil
+		}
+
+		// Check if we should retry with delay
+		if result.RetryDelay > 0 {
+			slog.Info("Condition not met, will retry after delay", logFields...)
+			if err := msg.NakWithDelay(result.RetryDelay); err != nil {
+				slog.Error("Failed to NAK message with delay",
+					"delay", result.RetryDelay,
+					"error", err)
+				return false, err
+			}
+			return false, nil
+		} else {
+			slog.Info("Condition not met, will use default retry mechanism", logFields...)
+			// Let the message go back to the stream without acknowledgment
+			return false, nil
+		}
+	}
+
+	// Prepare log fields for successful condition
+	logFields := []interface{}{}
+
+	// Add reason if provided
+	if result.Reason != "" {
+		logFields = append(logFields, "reason", result.Reason)
+	}
+
+	// Add any metadata
+	if len(result.Metadata) > 0 {
+		for k, v := range result.Metadata {
+			logFields = append(logFields, k, v)
+		}
+	}
+
+	// Condition met, proceed with processing
+	slog.Info("Condition met, processing message", logFields...)
+	return true, nil
+}
+
 // CreateOrUpdateConsumer creates or updates a consumer based on the provided input.
 func CreateOrUpdateConsumer(ctx context.Context, js jetstream.JetStream, ci ConsumerConfig) (jetstream.Consumer, error) {
 	dp := func() jetstream.DeliverPolicy {
