@@ -90,43 +90,25 @@ func (p *Processor) Process() {
 		slog.Info("Received a JetStream message", "subject", msg.Subject())
 		slog.Info("Processing message", "data", string(msg.Data()))
 
-		// Check if we have a condition function and if conditions are met
+		// Check if condition function is set and evaluate it
 		if p.conditionFn != nil {
-			conditionMet, err := p.conditionFn(msg)
+			result, err := p.conditionFn(msg)
 			if err != nil {
 				slog.Error("Error checking condition", "err", err)
 				p.handleErr(err, msg)
 				continue
 			}
 
-			if !conditionMet {
-				// Condition not met, check metadata for retry count
-				metadata, err := msg.Metadata()
-				if err != nil {
-					slog.Error("Error getting message metadata", "err", err)
-					p.handleErr(err, msg)
-					continue
-				}
-
-				// Check if we've exceeded max retries
-				if metadata.NumDelivered > uint64(p.maxRetries) {
-					slog.Warn("Max retries exceeded, terminating message", "msgID", metadata.Stream)
-					// Acknowledge the message to remove it from the queue
-					msg.Ack()
-					continue
-				}
-
-				// Condition not met and under retry limit, do not ack so it will be redelivered
-				slog.Info("Condition not met, message will be reprocessed later",
-					"delivery", metadata.NumDelivered,
-					"maxRetries", p.maxRetries)
-
-				// Let the message go back to the stream without acknowledgment
+			// Handle the condition result using the utility function
+			shouldProcess, err := HandleConditionResult(msg, result)
+			if err != nil {
+				p.handleErr(err, msg)
 				continue
 			}
 
-			// Condition met, proceed with processing
-			slog.Info("Condition met, processing message")
+			if !shouldProcess {
+				continue
+			}
 		}
 
 		// Process the message
