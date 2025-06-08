@@ -108,8 +108,8 @@ const (
 	retryDelay       = 5 * time.Second
 )
 
-// handleErr processes different types of errors and takes appropriate action
-func (p *Processor) handleErr(err error, msg jetstream.Msg) {
+// HandleErr processes different types of errors and takes appropriate action
+func (p *Processor) HandleErr(err error, msg jetstream.Msg) {
 	if err == nil {
 		msg.Ack()
 		return
