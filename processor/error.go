@@ -109,7 +109,7 @@ const (
 )
 
 // HandleErr processes different types of errors and takes appropriate action
-func (p *Processor) HandleErr(err error, msg jetstream.Msg) {
+func HandleErr(err error, msg jetstream.Msg) {
 	if err == nil {
 		msg.Ack()
 		return
