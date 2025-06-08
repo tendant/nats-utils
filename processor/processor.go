@@ -95,14 +95,14 @@ func (p *Processor) Process() {
 			result, err := p.conditionFn(msg)
 			if err != nil {
 				slog.Error("Error checking condition", "err", err)
-				p.handleErr(err, msg)
+				p.HandleErr(err, msg)
 				continue
 			}
 
 			// Handle the condition result using the utility function
 			shouldProcess, err := HandleConditionResult(msg, result)
 			if err != nil {
-				p.handleErr(err, msg)
+				p.HandleErr(err, msg)
 				continue
 			}
 
@@ -114,7 +114,7 @@ func (p *Processor) Process() {
 		// Process the message
 		err = p.processFn(msg)
 		if err != nil {
-			p.handleErr(err, msg)
+			p.HandleErr(err, msg)
 		} else {
 			// Acknowledge the message
 			msg.Ack()
