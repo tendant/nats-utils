@@ -252,6 +252,35 @@ func CreateStream(ctx context.Context, js jetstream.JetStream, streamName string
 	return js, err
 }
 
+func CreateOrUpdateStream(ctx context.Context, js jetstream.JetStream, streamConfig StreamConfig, recreate bool) (jetstream.JetStream, error) {
+	slog.Info("Createing stream", "name", streamConfig.Name, "subjects", streamConfig.Subjects)
+
+	rp := func() jetstream.RetentionPolicy {
+		switch streamConfig.RetentionPolicy {
+		case "limits":
+			return jetstream.LimitsPolicy
+		case "interest":
+			return jetstream.InterestPolicy
+		case "workqueue":
+			return jetstream.WorkQueuePolicy
+		default:
+			return jetstream.LimitsPolicy
+		}
+	}()
+
+	_, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+		Name:      streamConfig.Name,
+		Subjects:  streamConfig.Subjects,
+		Retention: rp,
+	})
+	if err != nil {
+		slog.Error("Failed CreateOrUpdateStream", "err", err)
+		return nil, err
+	}
+
+	return js, nil
+}
+
 func SetupStreams(ncConfig NatsConfig, streams map[string][]string) {
 	nc, err := CreateNc(ncConfig)
 	defer nc.Drain()
