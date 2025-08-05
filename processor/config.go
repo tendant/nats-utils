@@ -6,7 +6,8 @@ type NatsConfig struct {
 }
 
 type StreamConfig struct {
-	Name string `env:"STREAM_NAME" env-default:"DEMO"`
+	Name            string `env:"STREAM_NAME" env-default:"DEMO"`
+	RetentionPolicy string `env:"RETENTION_POLICY" env-default:"limits"`
 	// Subjects string `env:"STREAM_SUBJECTS" env-default:"demo.>"`
 }
 
