@@ -252,7 +252,7 @@ func CreateStream(ctx context.Context, js jetstream.JetStream, streamName string
 	return js, err
 }
 
-func CreateOrUpdateStream(ctx context.Context, js jetstream.JetStream, streamConfig StreamConfig, recreate bool) (jetstream.JetStream, error) {
+func CreateOrUpdateStream(ctx context.Context, js jetstream.JetStream, streamConfig StreamConfig) (jetstream.JetStream, error) {
 	slog.Info("Createing stream", "name", streamConfig.Name, "subjects", streamConfig.Subjects)
 
 	rp := func() jetstream.RetentionPolicy {
@@ -267,6 +267,15 @@ func CreateOrUpdateStream(ctx context.Context, js jetstream.JetStream, streamCon
 			return jetstream.LimitsPolicy
 		}
 	}()
+
+	// check if stream exists
+	if stream, err := js.Stream(ctx, streamConfig.Name); err == nil {
+		currentPolicy := stream.CachedInfo().Config.Retention
+
+		if currentPolicy != rp {
+			_ = js.DeleteStream(ctx, streamConfig.Name)
+		}
+	}
 
 	_, err := js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
 		Name:      streamConfig.Name,
