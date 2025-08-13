@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -203,4 +204,51 @@ func handleBlockingError(err *ErrBlocking, msg jetstream.Msg, logCtx []any) {
 	// Intentionally not acknowledging the message
 	// This will cause the message to remain pending and be redelivered
 	// after the consumer's AckWait timeout
+}
+
+// NatsErrHandler handles NATS client errors with special handling for slow consumers
+func NatsErrHandler(nc *nats.Conn, sub *nats.Subscription, err error) {
+	// Check if this is a slow consumer error
+	if err == nats.ErrSlowConsumer {
+		// Get pending message information if subscription is available
+		if sub != nil {
+			pendingMsgs, pendingBytes, pendingErr := sub.Pending()
+			if pendingErr != nil {
+				slog.Error("Slow consumer detected - unable to get pending info",
+					"error", err,
+					"pendingError", pendingErr,
+					"subject", sub.Subject,
+				)
+			} else {
+				slog.Error("Slow consumer detected",
+					"error", err,
+					"subject", sub.Subject,
+					"pendingMessages", pendingMsgs,
+					"pendingBytes", pendingBytes,
+				)
+			}
+		} else {
+			slog.Error("Slow consumer detected - no subscription info available",
+				"error", err,
+			)
+		}
+		
+		// Additional actions could be taken here such as:
+		// - Alerting monitoring systems
+		// - Adjusting processing rate
+		// - Scaling consumers
+		return
+	}
+	
+	// Handle other NATS errors
+	if sub != nil {
+		slog.Error("NATS error occurred",
+			"error", err,
+			"subject", sub.Subject,
+		)
+	} else {
+		slog.Error("NATS error occurred",
+			"error", err,
+		)
+	}
 }
