@@ -23,8 +23,22 @@ const (
 	AckWait time.Duration = 30 * time.Second
 )
 
-func CreateNc(ncConfig NatsConfig) (*nats.Conn, error) {
-	nc, err := nats.Connect(ncConfig.NatsURL)
+func CreateNc(ncConfig NatsConfig, opts ...nats.Option) (*nats.Conn, error) {
+	// Set up default options including our error handler
+	defaultOpts := []nats.Option{
+		nats.ErrorHandler(NatsErrHandler),
+		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
+			slog.Warn("NATS disconnected", "err", err)
+		}),
+		nats.ReconnectHandler(func(nc *nats.Conn) {
+			slog.Info("NATS reconnected", "url", nc.ConnectedUrl())
+		}),
+	}
+	
+	// Append any user-provided options
+	allOpts := append(defaultOpts, opts...)
+	
+	nc, err := nats.Connect(ncConfig.NatsURL, allOpts...)
 	// defer nc.Drain()
 
 	slog.Info("natsurl", "NatsURL", ncConfig.NatsURL)
