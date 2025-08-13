@@ -228,7 +228,7 @@ func CreateOrUpdateConsumer(ctx context.Context, js jetstream.JetStream, ci Cons
 }
 
 func CreateStream(ctx context.Context, js jetstream.JetStream, streamName string, streamSubjects []string, recreate bool) (jetstream.JetStream, error) {
-	slog.Info("Createing stream", "name", streamName, "subjects", streamSubjects)
+	slog.Info("Creating stream", "name", streamName, "subjects", streamSubjects)
 	_, err := js.CreateStream(ctx, jetstream.StreamConfig{
 		Name:     streamName,
 		Subjects: streamSubjects,
@@ -250,6 +250,33 @@ func CreateStream(ctx context.Context, js jetstream.JetStream, streamName string
 	}
 
 	return js, err
+}
+
+// CreateStreamWithConfig creates or updates a stream with full configuration options
+func CreateStreamWithConfig(ctx context.Context, js jetstream.JetStream, config jetstream.StreamConfig, recreate bool) (jetstream.Stream, error) {
+	slog.Info("Creating stream with config", "name", config.Name, "subjects", config.Subjects)
+	stream, err := js.CreateStream(ctx, config)
+	if err != nil {
+		if recreate {
+			slog.Error("Failed to create stream! Updating...", "error", err)
+			if config.Description == "" {
+				config.Description = fmt.Sprintf("Updated %s", config.Name)
+			}
+			stream, err = js.UpdateStream(ctx, config)
+			if err != nil {
+				slog.Error("Failed to update stream", "name", config.Name, "error", err)
+				return nil, err
+			}
+			slog.Info("Updated stream", "name", config.Name)
+		} else {
+			slog.Error("Failed creating stream", "name", config.Name, "error", err)
+			return nil, err
+		}
+	} else {
+		slog.Info("Created stream", "name", config.Name)
+	}
+
+	return stream, nil
 }
 
 func SetupStreams(ncConfig NatsConfig, streams map[string][]string) {
