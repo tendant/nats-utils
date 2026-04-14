@@ -1,9 +1,11 @@
 package processor
 
 import (
+	"errors"
 	"log/slog"
 	"time"
 
+	"github.com/nats-io/nats.go"
 	"github.com/nats-io/nats.go/jetstream"
 )
 
@@ -78,12 +80,21 @@ func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func
 }
 
 func (p *Processor) Process() {
+	if err := p.Run(); err != nil {
+		slog.Error("Processor stopped", "err", err)
+	}
+}
+
+func (p *Processor) Run() error {
 	slog.Info("Looping...")
 	// Continuously attempt to fetch and process messages.
 	for {
 		// Attempt to fetch the next message with a maximum wait time.
 		msg, err := p.consumer.Next(jetstream.FetchMaxWait(p.fetchTimeout))
 		if err != nil {
+			if isTerminalFetchError(err) {
+				return err
+			}
 			slog.Warn("Failed fetch messages!", "err", err)
 			continue
 		}
@@ -120,4 +131,10 @@ func (p *Processor) Process() {
 			msg.Ack()
 		}
 	}
+}
+
+func isTerminalFetchError(err error) bool {
+	return errors.Is(err, nats.ErrConnectionClosed) ||
+		errors.Is(err, jetstream.ErrConsumerDeleted) ||
+		errors.Is(err, jetstream.ErrBadRequest)
 }

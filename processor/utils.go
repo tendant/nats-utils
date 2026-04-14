@@ -21,23 +21,40 @@ const (
 	MaxDeliver int = 5
 	// AckWait defines the maximum time to wait for an acknowledgement before resending a message.
 	AckWait time.Duration = 30 * time.Second
+	// DefaultReconnectWait defines how long to wait between reconnect attempts.
+	DefaultReconnectWait time.Duration = 2 * time.Second
+	// DefaultReconnectJitter defines the jitter added to reconnect attempts.
+	DefaultReconnectJitter time.Duration = 500 * time.Millisecond
+	// DefaultReconnectJitterTLS defines the jitter added to TLS reconnect attempts.
+	DefaultReconnectJitterTLS time.Duration = 2 * time.Second
 )
 
 func CreateNc(ncConfig NatsConfig, opts ...nats.Option) (*nats.Conn, error) {
 	// Set up default options including our error handler
 	defaultOpts := []nats.Option{
 		nats.ErrorHandler(NatsErrHandler),
+		nats.MaxReconnects(-1),
+		nats.ReconnectWait(DefaultReconnectWait),
+		nats.ReconnectJitter(DefaultReconnectJitter, DefaultReconnectJitterTLS),
 		nats.DisconnectErrHandler(func(nc *nats.Conn, err error) {
 			slog.Warn("NATS disconnected", "err", err)
 		}),
 		nats.ReconnectHandler(func(nc *nats.Conn) {
 			slog.Info("NATS reconnected", "url", nc.ConnectedUrl())
 		}),
+		nats.ClosedHandler(func(nc *nats.Conn) {
+			if err := nc.LastError(); err != nil {
+				slog.Error("NATS connection closed", "err", err)
+				return
+			}
+
+			slog.Info("NATS connection closed")
+		}),
 	}
-	
+
 	// Append any user-provided options
 	allOpts := append(defaultOpts, opts...)
-	
+
 	nc, err := nats.Connect(ncConfig.NatsURL, allOpts...)
 	// defer nc.Drain()
 
