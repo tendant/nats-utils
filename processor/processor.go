@@ -3,6 +3,7 @@ package processor
 import (
 	"errors"
 	"log/slog"
+	"os"
 	"sync/atomic"
 	"time"
 
@@ -11,6 +12,9 @@ import (
 )
 
 const defaultFetchTimeout = 60 * time.Second
+
+// osExit is replaceable in tests.
+var osExit = os.Exit
 
 // ConditionResult represents the result of a condition check
 type ConditionResult struct {
@@ -101,9 +105,14 @@ func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func
 	return p
 }
 
+// Process runs the fetch loop and exits the process if the loop stops
+// on a terminal error. Exiting lets the platform (e.g. Kubernetes)
+// restart the consumer instead of leaving a process that looks healthy
+// but no longer consumes messages.
 func (p *Processor) Process() {
 	if err := p.Run(); err != nil {
-		slog.Error("Processor stopped", "err", err)
+		slog.Error("Processor stopped on terminal error, exiting", "err", err)
+		osExit(1)
 	}
 }
 

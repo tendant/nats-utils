@@ -58,6 +58,21 @@ func TestLastActivityUpdatedOnEachFetchIteration(t *testing.T) {
 	}
 }
 
+func TestProcessExitsProcessOnTerminalError(t *testing.T) {
+	exitCode := -1
+	origExit := osExit
+	osExit = func(code int) { exitCode = code }
+	defer func() { osExit = origExit }()
+
+	c := &stubConsumer{next: func() (jetstream.Msg, error) { return nil, nats.ErrConnectionClosed }}
+	p := NewProcessor(c, func(m jetstream.Msg) error { return nil })
+	p.Process()
+
+	if exitCode != 1 {
+		t.Fatalf("Process() must exit with code 1 on terminal error, got %d", exitCode)
+	}
+}
+
 func TestStoppedFlagSetWhenRunReturns(t *testing.T) {
 	c := &stubConsumer{next: func() (jetstream.Msg, error) { return nil, nats.ErrConnectionClosed }}
 	p := NewProcessor(c, func(m jetstream.Msg) error { return nil })
