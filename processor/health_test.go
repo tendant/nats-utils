@@ -2,6 +2,8 @@ package processor
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -55,6 +57,47 @@ func TestLastActivityUpdatedOnEachFetchIteration(t *testing.T) {
 
 	if p.LastActivity().Before(start) {
 		t.Fatalf("LastActivity() = %v, must be at or after Run start %v", p.LastActivity(), start)
+	}
+}
+
+type stubConn struct{ closed, draining bool }
+
+func (s stubConn) IsClosed() bool   { return s.closed }
+func (s stubConn) IsDraining() bool { return s.draining }
+
+// stoppedProcessor returns a Processor whose Run loop has already exited.
+func stoppedProcessor() *Processor {
+	c := &stubConsumer{next: func() (jetstream.Msg, error) { return nil, nats.ErrConnectionClosed }}
+	p := NewProcessor(c, func(m jetstream.Msg) error { return nil })
+	p.Run()
+	return p
+}
+
+func TestHealthzHandler(t *testing.T) {
+	running := NewProcessor(&stubConsumer{}, func(m jetstream.Msg) error { return nil })
+
+	cases := []struct {
+		name string
+		nc   ConnChecker
+		proc *Processor
+		want int
+	}{
+		{"healthy", stubConn{}, running, http.StatusOK},
+		{"connection closed", stubConn{closed: true}, running, http.StatusServiceUnavailable},
+		{"connection draining", stubConn{draining: true}, running, http.StatusServiceUnavailable},
+		{"processor stopped", stubConn{}, stoppedProcessor(), http.StatusServiceUnavailable},
+		{"nil connection", nil, running, http.StatusServiceUnavailable},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			HealthzHandler(tc.nc, tc.proc)(rec, req)
+			if rec.Code != tc.want {
+				t.Fatalf("status = %d, want %d (body: %q)", rec.Code, tc.want, rec.Body.String())
+			}
+		})
 	}
 }
 
