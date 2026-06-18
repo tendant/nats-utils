@@ -3,6 +3,8 @@ package processor
 import (
 	"errors"
 	"log/slog"
+	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -10,6 +12,9 @@ import (
 )
 
 const defaultFetchTimeout = 60 * time.Second
+
+// osExit is replaceable in tests.
+var osExit = os.Exit
 
 // ConditionResult represents the result of a condition check
 type ConditionResult struct {
@@ -45,6 +50,27 @@ type Processor struct {
 	processFn    ProcessFn
 	fetchTimeout time.Duration
 	conditionFn  ConditionCheckFn
+	stopped      atomic.Bool
+	lastActivity atomic.Int64 // unix nanoseconds of the last fetch loop iteration
+}
+
+// Stopped reports whether the processing loop has exited.
+// A stopped processor no longer consumes messages and the owning
+// process should be considered unhealthy.
+func (p *Processor) Stopped() bool {
+	return p.stopped.Load()
+}
+
+// LastActivity returns the time of the last fetch loop iteration,
+// or the zero time if the loop has not started. The loop iterates at
+// least once per fetch timeout, so a value much older than the fetch
+// timeout indicates a stuck processor.
+func (p *Processor) LastActivity() time.Time {
+	ns := p.lastActivity.Load()
+	if ns == 0 {
+		return time.Time{}
+	}
+	return time.Unix(0, ns)
 }
 
 // WithFetchTimeout sets the timeout duration for fetching messages.
@@ -79,16 +105,23 @@ func NewProcessor(consumer jetstream.Consumer, processFn ProcessFn, opts ...func
 	return p
 }
 
+// Process runs the fetch loop and exits the process if the loop stops
+// on a terminal error. Exiting lets the platform (e.g. Kubernetes)
+// restart the consumer instead of leaving a process that looks healthy
+// but no longer consumes messages.
 func (p *Processor) Process() {
 	if err := p.Run(); err != nil {
-		slog.Error("Processor stopped", "err", err)
+		slog.Error("Processor stopped on terminal error, exiting", "err", err)
+		osExit(1)
 	}
 }
 
 func (p *Processor) Run() error {
+	defer p.stopped.Store(true)
 	slog.Info("Looping...")
 	// Continuously attempt to fetch and process messages.
 	for {
+		p.lastActivity.Store(time.Now().UnixNano())
 		// Attempt to fetch the next message with a maximum wait time.
 		msg, err := p.consumer.Next(jetstream.FetchMaxWait(p.fetchTimeout))
 		if err != nil {
